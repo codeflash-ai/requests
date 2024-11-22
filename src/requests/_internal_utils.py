@@ -5,6 +5,7 @@ requests._internal_utils
 Provides utility functions that are consumed internally by Requests
 which depend on extremely few external helpers (such as compat)
 """
+
 import re
 
 from .compat import builtin_str
@@ -27,12 +28,9 @@ def to_native_string(string, encoding="ascii"):
     that string in the native string type, encoding and decoding where
     necessary. This assumes ASCII unless told otherwise.
     """
-    if isinstance(string, builtin_str):
-        out = string
-    else:
-        out = string.decode(encoding)
-
-    return out
+    if isinstance(string, str):
+        return string
+    return string.decode(encoding)
 
 
 def unicode_is_ascii(u_string):
