@@ -32,7 +32,7 @@ def _basic_auth_str(username, password):
     #
     # These are here solely to maintain backwards compatibility
     # for things like ints. This will be removed in 3.0.0.
-    if not isinstance(username, basestring):
+    if not isinstance(username, (str, bytes)):
         warnings.warn(
             "Non-string usernames will no longer be supported in Requests "
             "3.0.0. Please convert the object you've passed in ({!r}) to "
@@ -42,7 +42,7 @@ def _basic_auth_str(username, password):
         )
         username = str(username)
 
-    if not isinstance(password, basestring):
+    if not isinstance(password, (str, bytes)):
         warnings.warn(
             "Non-string passwords will no longer be supported in Requests "
             "3.0.0. Please convert the object you've passed in ({!r}) to "
@@ -53,15 +53,11 @@ def _basic_auth_str(username, password):
         password = str(password)
     # -- End Removal --
 
-    if isinstance(username, str):
-        username = username.encode("latin1")
+    username = username.encode("latin1") if isinstance(username, str) else username
+    password = password.encode("latin1") if isinstance(password, str) else password
 
-    if isinstance(password, str):
-        password = password.encode("latin1")
-
-    authstr = "Basic " + to_native_string(
-        b64encode(b":".join((username, password))).strip()
-    )
+    encoded_str = b64encode(b":".join((username, password))).strip()
+    authstr = "Basic " + to_native_string(encoded_str)
 
     return authstr
 
