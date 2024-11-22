@@ -10,6 +10,7 @@ requests.utils imports from here, so be careful with imports.
 import calendar
 import copy
 import time
+from re import match
 
 from ._internal_utils import to_native_string
 from .compat import Morsel, MutableMapping, cookielib, urlparse, urlunparse
@@ -98,6 +99,10 @@ class MockRequest:
     @property
     def host(self):
         return self.get_host()
+
+    @staticmethod
+    def _get_scheme(url):
+        return match(r"^(https?)", url).group(0)
 
 
 class MockResponse:
