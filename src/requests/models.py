@@ -735,7 +735,7 @@ class Response:
         the status code, is between 200 and 400, this will return True. This
         is **not** a check to see if the response code is ``200 OK``.
         """
-        return self.ok
+        return 200 <= self.status_code < 400
 
     def __nonzero__(self):
         """Returns True if :attr:`status_code` is less than 400.
