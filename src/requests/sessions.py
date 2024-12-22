@@ -14,7 +14,7 @@ from datetime import timedelta
 from ._internal_utils import to_native_string
 from .adapters import HTTPAdapter
 from .auth import _basic_auth_str
-from .compat import Mapping, cookielib, urljoin, urlparse
+from .compat import builtin_str, Mapping, cookielib, urljoin, urlparse
 from .cookies import (
     RequestsCookieJar,
     cookiejar_from_dict,
@@ -114,14 +114,11 @@ class SessionRedirectMixin:
         # attribute.
         if resp.is_redirect:
             location = resp.headers["location"]
-            # Currently the underlying http module on py3 decode headers
-            # in latin1, but empirical evidence suggests that latin1 is very
-            # rarely used with non-ASCII characters in HTTP headers.
-            # It is more likely to get UTF8 header rather than latin1.
-            # This causes incorrect handling of UTF8 encoded location headers.
-            # To solve this, we re-encode the location in latin1.
-            location = location.encode("latin1")
-            return to_native_string(location, "utf8")
+            # Encode headers in UTF-8 since it's more common for HTTP headers.
+            # Convert string to native format directly.
+            if not isinstance(location, builtin_str):
+                location = location.encode("latin1").decode("utf8")
+            return location
         return None
 
     def should_strip_auth(self, old_url, new_url):
