@@ -58,6 +58,7 @@ from .exceptions import (
     UnrewindableBodyError,
 )
 from .structures import CaseInsensitiveDict
+from functools import lru_cache
 
 NETRC_FILES = (".netrc", "_netrc")
 
@@ -771,59 +772,29 @@ def should_bypass_proxies(url, no_proxy):
 
     :rtype: bool
     """
-
-    # Prioritize lowercase environment variables over uppercase
-    # to keep a consistent behaviour with other http projects (curl, wget).
-    def get_proxy(key):
-        return os.environ.get(key) or os.environ.get(key.upper())
-
-    # First check whether no_proxy is defined. If it is, check that the URL
-    # we're getting isn't in the no_proxy list.
-    no_proxy_arg = no_proxy
-    if no_proxy is None:
-        no_proxy = get_proxy("no_proxy")
     parsed = urlparse(url)
-
     if parsed.hostname is None:
-        # URLs don't always have hostnames, e.g. file:/// urls.
         return True
+
+    no_proxy = resolve_no_proxy(no_proxy)
+    hostname = parsed.hostname
 
     if no_proxy:
-        # We need to check whether we match here. We need to see if we match
-        # the end of the hostname, both with and without the port.
-        no_proxy = (host for host in no_proxy.replace(" ", "").split(",") if host)
-
-        if is_ipv4_address(parsed.hostname):
+        if is_ipv4_address(hostname):
             for proxy_ip in no_proxy:
-                if is_valid_cidr(proxy_ip):
-                    if address_in_network(parsed.hostname, proxy_ip):
-                        return True
-                elif parsed.hostname == proxy_ip:
-                    # If no_proxy ip was defined in plain IP notation instead of cidr notation &
-                    # matches the IP of the index
+                if proxy_ip == hostname or address_in_network(hostname, proxy_ip):
                     return True
         else:
-            host_with_port = parsed.hostname
-            if parsed.port:
-                host_with_port += f":{parsed.port}"
-
+            host_with_port = f"{hostname}:{parsed.port}" if parsed.port else hostname
             for host in no_proxy:
-                if parsed.hostname.endswith(host) or host_with_port.endswith(host):
-                    # The URL does match something in no_proxy, so we don't want
-                    # to apply the proxies on this URL.
+                if hostname.endswith(host) or host_with_port.endswith(host):
                     return True
 
-    with set_environ("no_proxy", no_proxy_arg):
-        # parsed.hostname can be `None` in cases such as a file URI.
-        try:
-            bypass = proxy_bypass(parsed.hostname)
-        except (TypeError, socket.gaierror):
-            bypass = False
-
-    if bypass:
-        return True
-
-    return False
+    try:
+        with set_environ("no_proxy", ','.join(no_proxy)):
+            return proxy_bypass(hostname)
+    except (TypeError, socket.gaierror):
+        return False
 
 
 def get_environ_proxies(url, no_proxy=None):
@@ -834,8 +805,7 @@ def get_environ_proxies(url, no_proxy=None):
     """
     if should_bypass_proxies(url, no_proxy=no_proxy):
         return {}
-    else:
-        return getproxies()
+    return getproxies()
 
 
 def select_proxy(url, proxies):
@@ -865,9 +835,8 @@ def select_proxy(url, proxies):
 
 
 def resolve_proxies(request, proxies, trust_env=True):
-    """This method takes proxy information from a request and configuration
-    input to resolve a mapping of target proxies. This will consider settings
-    such as NO_PROXY to strip proxy configurations.
+    """
+    Resolve proxy configuration for a request.
 
     :param request: Request or PreparedRequest
     :param proxies: A dictionary of schemes or schemes and hosts to proxy URLs
@@ -875,7 +844,7 @@ def resolve_proxies(request, proxies, trust_env=True):
 
     :rtype: dict
     """
-    proxies = proxies if proxies is not None else {}
+    proxies = proxies if proxies else {}
     url = request.url
     scheme = urlparse(url).scheme
     no_proxy = proxies.get("no_proxy")
@@ -883,11 +852,10 @@ def resolve_proxies(request, proxies, trust_env=True):
 
     if trust_env and not should_bypass_proxies(url, no_proxy=no_proxy):
         environ_proxies = get_environ_proxies(url, no_proxy=no_proxy)
-
         proxy = environ_proxies.get(scheme, environ_proxies.get("all"))
-
         if proxy:
             new_proxies.setdefault(scheme, proxy)
+
     return new_proxies
 
 
@@ -1097,3 +1065,24 @@ def rewind_body(prepared_request):
             )
     else:
         raise UnrewindableBodyError("Unable to rewind request body for redirect.")
+
+
+@lru_cache(None)
+def get_proxy(key):
+    """Get proxy setting from environment variables, prioritize lowercase."""
+    return os.environ.get(key) or os.environ.get(key.upper())
+
+@lru_cache(None)
+def resolve_no_proxy(no_proxy):
+    """Resolve and sanitize no_proxy environment value."""
+    if no_proxy is None:
+        no_proxy = get_proxy("no_proxy")
+    return set(host.strip() for host in no_proxy.replace(" ", "").split(",") if host)
+
+def is_ipv4_address(address):
+    """Check if the address is a valid IPv4 address."""
+    try:
+        socket.inet_pton(socket.AF_INET, address)
+        return True
+    except socket.error:
+        return False
