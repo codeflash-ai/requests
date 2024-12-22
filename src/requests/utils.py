@@ -523,19 +523,16 @@ def _parse_content_type_header(header):
     """
 
     tokens = header.split(";")
-    content_type, params = tokens[0].strip(), tokens[1:]
+    content_type = tokens[0].strip()
     params_dict = {}
     items_to_strip = "\"' "
 
-    for param in params:
-        param = param.strip()
-        if param:
-            key, value = param, True
-            index_of_equals = param.find("=")
-            if index_of_equals != -1:
-                key = param[:index_of_equals].strip(items_to_strip)
-                value = param[index_of_equals + 1 :].strip(items_to_strip)
-            params_dict[key.lower()] = value
+    for param in tokens[1:]:
+        key_value = param.split('=', 1)
+        key = key_value[0].strip(items_to_strip).lower()
+        value = key_value[1].strip(items_to_strip) if len(key_value) > 1 else True
+        params_dict[key] = value
+        
     return content_type, params_dict
 
 
