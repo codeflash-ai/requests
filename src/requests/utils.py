@@ -844,24 +844,25 @@ def select_proxy(url, proxies):
     :param url: The url being for the request
     :param proxies: A dictionary of schemes or schemes and hosts to proxy URLs
     """
-    proxies = proxies or {}
+    if not proxies:
+        return None  # Early return if proxies are not provided
+  
     urlparts = urlparse(url)
-    if urlparts.hostname is None:
+    if not urlparts.hostname:
         return proxies.get(urlparts.scheme, proxies.get("all"))
 
-    proxy_keys = [
-        urlparts.scheme + "://" + urlparts.hostname,
+    proxy_keys = (
+        f"{urlparts.scheme}://{urlparts.hostname}",
         urlparts.scheme,
-        "all://" + urlparts.hostname,
+        f"all://{urlparts.hostname}",
         "all",
-    ]
-    proxy = None
+    )
+
     for proxy_key in proxy_keys:
         if proxy_key in proxies:
-            proxy = proxies[proxy_key]
-            break
+            return proxies[proxy_key]  # Early return if proxy found
 
-    return proxy
+    return None  # If no proxy is found
 
 
 def resolve_proxies(request, proxies, trust_env=True):
@@ -1072,7 +1073,6 @@ def urldefragauth(url):
     """
     scheme, netloc, path, params, query, fragment = urlparse(url)
 
-    # see func:`prepend_scheme_if_needed`
     if not netloc:
         netloc, path = path, netloc
 
