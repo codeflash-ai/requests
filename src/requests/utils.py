@@ -725,21 +725,25 @@ def is_valid_cidr(string_network):
 
     :rtype: bool
     """
-    if string_network.count("/") == 1:
-        try:
-            mask = int(string_network.split("/")[1])
-        except ValueError:
-            return False
-
-        if mask < 1 or mask > 32:
-            return False
-
-        try:
-            socket.inet_aton(string_network.split("/")[0])
-        except OSError:
-            return False
-    else:
+    parts = string_network.split("/")
+    if len(parts) != 2:
         return False
+    
+    network, mask_str = parts
+
+    try:
+        mask = int(mask_str)
+    except ValueError:
+        return False
+
+    if mask < 1 or mask > 32:
+        return False
+
+    try:
+        socket.inet_aton(network)
+    except OSError:
+        return False
+
     return True
 
 
