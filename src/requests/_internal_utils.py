@@ -8,6 +8,7 @@ which depend on extremely few external helpers (such as compat)
 import re
 
 from .compat import builtin_str
+from .compat import str as builtin_str
 
 _VALID_HEADER_NAME_RE_BYTE = re.compile(rb"^[^:\s][^:\r\n]*$")
 _VALID_HEADER_NAME_RE_STR = re.compile(r"^[^:\s][^:\r\n]*$")
@@ -27,12 +28,7 @@ def to_native_string(string, encoding="ascii"):
     that string in the native string type, encoding and decoding where
     necessary. This assumes ASCII unless told otherwise.
     """
-    if isinstance(string, builtin_str):
-        out = string
-    else:
-        out = string.decode(encoding)
-
-    return out
+    return string if isinstance(string, builtin_str) else string.decode(encoding)
 
 
 def unicode_is_ascii(u_string):
