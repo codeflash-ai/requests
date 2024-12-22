@@ -58,6 +58,7 @@ from .exceptions import (
     UnrewindableBodyError,
 )
 from .structures import CaseInsensitiveDict
+from urllib.parse import urlparse
 
 NETRC_FILES = (".netrc", "_netrc")
 
@@ -844,22 +845,19 @@ def select_proxy(url, proxies):
     :param url: The url being for the request
     :param proxies: A dictionary of schemes or schemes and hosts to proxy URLs
     """
-    proxies = proxies or {}
+    if not proxies:
+        return None
+    
     urlparts = urlparse(url)
-    if urlparts.hostname is None:
+    hostname = urlparts.hostname
+    
+    if not hostname:
         return proxies.get(urlparts.scheme, proxies.get("all"))
 
-    proxy_keys = [
-        urlparts.scheme + "://" + urlparts.hostname,
-        urlparts.scheme,
-        "all://" + urlparts.hostname,
-        "all",
-    ]
-    proxy = None
-    for proxy_key in proxy_keys:
-        if proxy_key in proxies:
-            proxy = proxies[proxy_key]
-            break
+    proxy = (proxies.get(f"{urlparts.scheme}://{hostname}") or
+             proxies.get(urlparts.scheme) or
+             proxies.get(f"all://{hostname}") or
+             proxies.get("all"))
 
     return proxy
 
