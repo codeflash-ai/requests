@@ -690,11 +690,12 @@ def address_in_network(ip, net):
 
     :rtype: bool
     """
-    ipaddr = struct.unpack("=L", socket.inet_aton(ip))[0]
+    ipaddr = struct.unpack("!I", socket.inet_aton(ip))[0]
     netaddr, bits = net.split("/")
-    netmask = struct.unpack("=L", socket.inet_aton(dotted_netmask(int(bits))))[0]
-    network = struct.unpack("=L", socket.inet_aton(netaddr))[0] & netmask
-    return (ipaddr & netmask) == (network & netmask)
+    bits = int(bits)
+    netmask = (1 << 32) - (1 << 32 - bits)
+    netaddr = struct.unpack("!I", socket.inet_aton(netaddr))[0]
+    return (ipaddr & netmask) == (netaddr & netmask)
 
 
 def dotted_netmask(mask):
@@ -704,8 +705,7 @@ def dotted_netmask(mask):
 
     :rtype: str
     """
-    bits = 0xFFFFFFFF ^ (1 << 32 - mask) - 1
-    return socket.inet_ntoa(struct.pack(">I", bits))
+    return socket.inet_ntoa(struct.pack(">I", (1 << 32) - (1 << 32 - mask)))
 
 
 def is_ipv4_address(string_ip):
