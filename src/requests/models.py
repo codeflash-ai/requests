@@ -65,6 +65,9 @@ from .utils import (
     super_len,
     to_key_val_list,
 )
+from requests.exceptions import ChunkedEncodingError, ConnectionError, ContentDecodingError, SSLError as RequestsSSLError, StreamConsumedError
+from requests.cookies import cookiejar_from_dict
+from requests.structures import CaseInsensitiveDict
 
 #: The set of HTTP status codes that indicate an automatically
 #: processable redirect.
@@ -812,46 +815,36 @@ class Response:
         If decode_unicode is True, content will be decoded using the best
         available encoding based on the response.
         """
-
-        def generate():
-            # Special case for urllib3.
-            if hasattr(self.raw, "stream"):
-                try:
-                    yield from self.raw.stream(chunk_size, decode_content=True)
-                except ProtocolError as e:
-                    raise ChunkedEncodingError(e)
-                except DecodeError as e:
-                    raise ContentDecodingError(e)
-                except ReadTimeoutError as e:
-                    raise ConnectionError(e)
-                except SSLError as e:
-                    raise RequestsSSLError(e)
-            else:
-                # Standard file-like object.
-                while True:
-                    chunk = self.raw.read(chunk_size)
-                    if not chunk:
-                        break
-                    yield chunk
-
-            self._content_consumed = True
-
         if self._content_consumed and isinstance(self._content, bool):
             raise StreamConsumedError()
-        elif chunk_size is not None and not isinstance(chunk_size, int):
+        if chunk_size is not None and not isinstance(chunk_size, int):
             raise TypeError(
                 f"chunk_size must be an int, it is instead a {type(chunk_size)}."
             )
-        # simulate reading small chunks of the content
-        reused_chunks = iter_slices(self._content, chunk_size)
-
-        stream_chunks = generate()
-
-        chunks = reused_chunks if self._content_consumed else stream_chunks
-
-        if decode_unicode:
-            chunks = stream_decode_response_unicode(chunks, self)
-
+        
+        def generate(raw, chunk_size):
+            if hasattr(raw, "stream"):
+                try:
+                    yield from raw.stream(chunk_size, decode_content=True)
+                except (ProtocolError, DecodeError, ReadTimeoutError, SSLError) as e:
+                    if isinstance(e, ProtocolError):
+                        raise ChunkedEncodingError(e)
+                    elif isinstance(e, DecodeError):
+                        raise ContentDecodingError(e)
+                    elif isinstance(e, ReadTimeoutError):
+                        raise ConnectionError(e)
+                    elif isinstance(e, SSLError):
+                        raise RequestsSSLError(e)
+            else:
+                while True:
+                    chunk = raw.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+            self._content_consumed = True
+        
+        reused_chunks = iter_slices(self._content, chunk_size) if self._content_consumed else generate(self.raw, chunk_size)
+        chunks = stream_decode_response_unicode(reused_chunks, self) if decode_unicode else reused_chunks
         return chunks
 
     def iter_lines(
@@ -1035,3 +1028,7 @@ class Response:
         release_conn = getattr(self.raw, "release_conn", None)
         if release_conn is not None:
             release_conn()
+    
+    def close(self):
+        if self.raw and hasattr(self.raw, "close"):
+            self.raw.close()
