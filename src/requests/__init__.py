@@ -43,6 +43,7 @@ import warnings
 import urllib3
 
 from .exceptions import RequestsDependencyWarning
+from cryptography import __version__ as cryptography_version
 
 try:
     from charset_normalizer import __version__ as charset_normalizer_version
@@ -92,15 +93,16 @@ def check_compatibility(urllib3_version, chardet_version, charset_normalizer_ver
 
 def _check_cryptography(cryptography_version):
     # cryptography < 1.3.4
+    cryptography_version_list = cryptography_version.split(".")
+    if len(cryptography_version_list) != 3:
+        return
     try:
-        cryptography_version = list(map(int, cryptography_version.split(".")))
+        major, minor, patch = map(int, cryptography_version_list)
     except ValueError:
         return
 
-    if cryptography_version < [1, 3, 4]:
-        warning = "Old version of cryptography ({}) may cause slowdown.".format(
-            cryptography_version
-        )
+    if (major, minor, patch) < (1, 3, 4):
+        warning = f"Old version of cryptography ({cryptography_version}) may cause slowdown."
         warnings.warn(warning, RequestsDependencyWarning)
 
 
