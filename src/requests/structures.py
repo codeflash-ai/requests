@@ -6,6 +6,7 @@ Data structures that power Requests.
 """
 
 from collections import OrderedDict
+from collections.abc import MutableMapping
 
 from .compat import Mapping, MutableMapping
 
@@ -77,7 +78,10 @@ class CaseInsensitiveDict(MutableMapping):
         return CaseInsensitiveDict(self._store.values())
 
     def __repr__(self):
-        return str(dict(self.items()))
+        return str({k: v for k, (casedkey, v) in self._store.items()})
+
+    def lower_items(self):
+        return ((k.lower(), v) for k, (casedkey, v) in self._store.items())
 
 
 class LookupDict(dict):
