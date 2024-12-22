@@ -65,6 +65,7 @@ from .utils import (
     super_len,
     to_key_val_list,
 )
+from urllib.parse import urlparse as parse_url, urlunparse
 
 #: The set of HTTP status codes that indicate an automatically
 #: processable redirect.
@@ -408,31 +409,31 @@ class PreparedRequest(RequestEncodingMixin, RequestHooksMixin):
 
     def prepare_url(self, url, params):
         """Prepares the given HTTP URL."""
-        #: Accept objects that have string representations.
-        #: We're unable to blindly call unicode/str functions
-        #: as this will include the bytestring indicator (b'')
-        #: on python 3.x.
-        #: https://github.com/psf/requests/pull/2238
         if isinstance(url, bytes):
             url = url.decode("utf8")
         else:
             url = str(url)
 
-        # Remove leading whitespaces from url
         url = url.lstrip()
 
-        # Don't do any URL preparation for non-HTTP schemes like `mailto`,
-        # `data` etc to work around exceptions from `url_parse`, which
-        # handles RFC 3986 only.
         if ":" in url and not url.lower().startswith("http"):
             self.url = url
             return
 
-        # Support for unicode domain names and paths.
         try:
-            scheme, auth, host, port, path, query, fragment = parse_url(url)
-        except LocationParseError as e:
+            parsed = parse_url(url)
+        except Exception as e:
             raise InvalidURL(*e.args)
+
+        scheme, auth, host, port, path, query, fragment = (
+            parsed.scheme,
+            parsed.username,
+            parsed.hostname,
+            parsed.port,
+            parsed.path,
+            parsed.query,
+            parsed.fragment,
+        )
 
         if not scheme:
             raise MissingSchema(
@@ -443,41 +444,26 @@ class PreparedRequest(RequestEncodingMixin, RequestHooksMixin):
         if not host:
             raise InvalidURL(f"Invalid URL {url!r}: No host supplied")
 
-        # In general, we want to try IDNA encoding the hostname if the string contains
-        # non-ASCII characters. This allows users to automatically get the correct IDNA
-        # behaviour. For strings containing only ASCII characters, we need to also verify
-        # it doesn't start with a wildcard (*), before allowing the unencoded hostname.
         if not unicode_is_ascii(host):
             try:
-                host = self._get_idna_encoded_host(host)
+                host = host.encode('idna').decode('ascii')
             except UnicodeError:
                 raise InvalidURL("URL has an invalid label.")
         elif host.startswith(("*", ".")):
             raise InvalidURL("URL has an invalid label.")
 
-        # Carefully reconstruct the network location
-        netloc = auth or ""
-        if netloc:
-            netloc += "@"
-        netloc += host
-        if port:
-            netloc += f":{port}"
+        netloc = f"{auth + '@' if auth else ''}{host}{f':{port}' if port else ''}"
 
-        # Bare domains aren't valid URLs.
-        if not path:
-            path = "/"
+        path = path or "/"
 
         if isinstance(params, (str, bytes)):
             params = to_native_string(params)
 
-        enc_params = self._encode_params(params)
+        enc_params = self._encode_params(params or "")
         if enc_params:
-            if query:
-                query = f"{query}&{enc_params}"
-            else:
-                query = enc_params
+            query = f"{query}&{enc_params}" if query else enc_params
 
-        url = requote_uri(urlunparse([scheme, netloc, path, None, query, fragment]))
+        url = requote_uri(urlunparse((scheme, netloc, path, None, query, fragment)))
         self.url = url
 
     def prepare_headers(self, headers):

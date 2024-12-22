@@ -23,25 +23,14 @@ HEADER_VALIDATORS = {
 
 
 def to_native_string(string, encoding="ascii"):
-    """Given a string object, regardless of type, returns a representation of
-    that string in the native string type, encoding and decoding where
-    necessary. This assumes ASCII unless told otherwise.
-    """
-    if isinstance(string, builtin_str):
-        out = string
-    else:
-        out = string.decode(encoding)
-
-    return out
+    """Given a string object, returns a representation in the native string type."""
+    if isinstance(string, bytes):
+        return string.decode(encoding)
+    return string
 
 
 def unicode_is_ascii(u_string):
-    """Determine if unicode string only contains ASCII characters.
-
-    :param str u_string: unicode string to check. Must be unicode
-        and not Python 2 `str`.
-    :rtype: bool
-    """
+    """Determine if unicode string only contains ASCII characters."""
     assert isinstance(u_string, str)
     try:
         u_string.encode("ascii")
