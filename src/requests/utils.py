@@ -642,22 +642,32 @@ def unquote_unreserved(uri):
 
     :rtype: str
     """
-    parts = uri.split("%")
-    for i in range(1, len(parts)):
-        h = parts[i][0:2]
-        if len(h) == 2 and h.isalnum():
-            try:
-                c = chr(int(h, 16))
-            except ValueError:
-                raise InvalidURL(f"Invalid percent-escape sequence: '{h}'")
+    parts = uri.split('%')
+    if len(parts) == 1:
+        return uri
 
-            if c in UNRESERVED_SET:
-                parts[i] = c + parts[i][2:]
+    result = [parts[0]]
+    append = result.append
+
+    for i in range(1, len(parts)):
+        part = parts[i]
+        if len(part) >= 2:
+            hex_part = part[:2]
+            if hex_part.isalnum():
+                try:
+                    char = chr(int(hex_part, 16))
+                except ValueError:
+                    raise InvalidURL(f"Invalid percent-escape sequence: '{hex_part}'")
+                
+                if char in UNRESERVED_SET:
+                    append(char + part[2:])
+                else:
+                    append('%' + part)
             else:
-                parts[i] = f"%{parts[i]}"
+                append('%' + part)
         else:
-            parts[i] = f"%{parts[i]}"
-    return "".join(parts)
+            append('%' + part)
+    return ''.join(result)
 
 
 def requote_uri(uri):
