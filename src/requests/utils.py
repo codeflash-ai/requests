@@ -28,9 +28,7 @@ from .__version__ import __version__
 from ._internal_utils import (  # noqa: F401
     _HEADER_VALIDATORS_BYTE,
     _HEADER_VALIDATORS_STR,
-    HEADER_VALIDATORS,
-    to_native_string,
-)
+    HEADER_VALIDATORS)
 from .compat import (
     Mapping,
     basestring,
@@ -875,20 +873,21 @@ def resolve_proxies(request, proxies, trust_env=True):
 
     :rtype: dict
     """
-    proxies = proxies if proxies is not None else {}
+    if proxies is None:
+        proxies = {}
+        
     url = request.url
     scheme = urlparse(url).scheme
     no_proxy = proxies.get("no_proxy")
-    new_proxies = proxies.copy()
 
     if trust_env and not should_bypass_proxies(url, no_proxy=no_proxy):
         environ_proxies = get_environ_proxies(url, no_proxy=no_proxy)
-
         proxy = environ_proxies.get(scheme, environ_proxies.get("all"))
-
+        
         if proxy:
-            new_proxies.setdefault(scheme, proxy)
-    return new_proxies
+            proxies.setdefault(scheme, proxy)
+
+    return proxies
 
 
 def default_user_agent(name="python-requests"):
@@ -1026,12 +1025,10 @@ def get_auth_from_url(url):
     """
     parsed = urlparse(url)
 
-    try:
-        auth = (unquote(parsed.username), unquote(parsed.password))
-    except (AttributeError, TypeError):
-        auth = ("", "")
+    username = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
 
-    return auth
+    return username, password
 
 
 def check_header_validity(header):
