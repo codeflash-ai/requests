@@ -369,7 +369,7 @@ def to_key_val_list(value):
         raise ValueError("cannot encode objects that are not 2-tuples")
 
     if isinstance(value, Mapping):
-        value = value.items()
+        return list(value.items())
 
     return list(value)
 
