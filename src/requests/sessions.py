@@ -76,14 +76,14 @@ def merge_setting(request_setting, session_setting, dict_class=OrderedDict):
     ):
         return request_setting
 
-    merged_setting = dict_class(to_key_val_list(session_setting))
-    merged_setting.update(to_key_val_list(request_setting))
+    merged_setting = dict_class()
+    for k, v in to_key_val_list(session_setting):
+        if v is not None:
+            merged_setting[k] = v
 
-    # Remove keys that are set to None. Extract keys first to avoid altering
-    # the dictionary during iteration.
-    none_keys = [k for (k, v) in merged_setting.items() if v is None]
-    for key in none_keys:
-        del merged_setting[key]
+    for k, v in to_key_val_list(request_setting):
+        if v is not None:
+            merged_setting[k] = v
 
     return merged_setting
 
@@ -94,10 +94,10 @@ def merge_hooks(request_hooks, session_hooks, dict_class=OrderedDict):
     This is necessary because when request_hooks == {'response': []}, the
     merge breaks Session hooks entirely.
     """
-    if session_hooks is None or session_hooks.get("response") == []:
+    if session_hooks is None or not session_hooks.get("response"):
         return request_hooks
 
-    if request_hooks is None or request_hooks.get("response") == []:
+    if request_hooks is None or not request_hooks.get("response"):
         return session_hooks
 
     return merge_setting(request_hooks, session_hooks, dict_class)
