@@ -14,7 +14,7 @@ from datetime import timedelta
 from ._internal_utils import to_native_string
 from .adapters import HTTPAdapter
 from .auth import _basic_auth_str
-from .compat import Mapping, cookielib, urljoin, urlparse
+from .compat import unquote, Mapping, cookielib, urljoin, urlparse
 from .cookies import (
     RequestsCookieJar,
     cookiejar_from_dict,
@@ -318,15 +318,16 @@ class SessionRedirectMixin:
         if "Proxy-Authorization" in headers:
             del headers["Proxy-Authorization"]
 
-        try:
-            username, password = get_auth_from_url(new_proxies[scheme])
-        except KeyError:
-            username, password = None, None
+        proxy_url = new_proxies.get(scheme)
+        if proxy_url:
+            parsed = urlparse(proxy_url)
+            username = unquote(parsed.username or "")
+            password = unquote(parsed.password or "")
 
-        # urllib3 handles proxy authorization for us in the standard adapter.
-        # Avoid appending this to TLS tunneled requests where it may be leaked.
-        if not scheme.startswith("https") and username and password:
-            headers["Proxy-Authorization"] = _basic_auth_str(username, password)
+            # urllib3 handles proxy authorization for us in the standard adapter.
+            # Avoid appending this to TLS tunneled requests where it may be leaked.
+            if username and password and not scheme.startswith("https"):
+                headers["Proxy-Authorization"] = _basic_auth_str(username, password)
 
         return new_proxies
 
