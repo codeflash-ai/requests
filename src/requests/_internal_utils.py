@@ -28,11 +28,8 @@ def to_native_string(string, encoding="ascii"):
     necessary. This assumes ASCII unless told otherwise.
     """
     if isinstance(string, builtin_str):
-        out = string
-    else:
-        out = string.decode(encoding)
-
-    return out
+        return string
+    return string.decode(encoding)
 
 
 def unicode_is_ascii(u_string):
