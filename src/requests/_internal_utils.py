@@ -5,6 +5,7 @@ requests._internal_utils
 Provides utility functions that are consumed internally by Requests
 which depend on extremely few external helpers (such as compat)
 """
+
 import re
 
 from .compat import builtin_str
@@ -43,8 +44,4 @@ def unicode_is_ascii(u_string):
     :rtype: bool
     """
     assert isinstance(u_string, str)
-    try:
-        u_string.encode("ascii")
-        return True
-    except UnicodeEncodeError:
-        return False
+    return u_string.isascii()
