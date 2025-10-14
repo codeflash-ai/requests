@@ -547,10 +547,23 @@ def get_encoding_from_headers(headers):
     """
 
     content_type = headers.get("content-type")
-
     if not content_type:
         return None
 
+    content_type_lower = content_type.lower()
+    if "charset=" in content_type_lower:
+        parts = content_type_lower.split("charset=", 1)
+        charset = parts[1].split(";", 1)[0].strip(" '\"")
+        return charset
+
+    if "text" in content_type_lower:
+        return "ISO-8859-1"
+
+    if "application/json" in content_type_lower:
+        # Assume UTF-8 based on RFC 4627: https://www.ietf.org/rfc/rfc4627.txt since the charset was unset
+        return "utf-8"
+
+    # Fallback for complex headers
     content_type, params = _parse_content_type_header(content_type)
 
     if "charset" in params:
@@ -560,7 +573,6 @@ def get_encoding_from_headers(headers):
         return "ISO-8859-1"
 
     if "application/json" in content_type:
-        # Assume UTF-8 based on RFC 4627: https://www.ietf.org/rfc/rfc4627.txt since the charset was unset
         return "utf-8"
 
 
