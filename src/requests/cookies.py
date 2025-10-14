@@ -36,6 +36,7 @@ class MockRequest:
         self._r = request
         self._new_headers = {}
         self.type = urlparse(self._r.url).scheme
+        self._parsed_url = urlparse(self._r.url)
 
     def get_type(self):
         return self.type
@@ -53,7 +54,7 @@ class MockRequest:
             return self._r.url
         # If they did set it, retrieve it and reconstruct the expected domain
         host = to_native_string(self._r.headers["Host"], encoding="utf-8")
-        parsed = urlparse(self._r.url)
+        parsed = self._parsed_url
         # Reconstruct the URL as we expect it
         return urlunparse(
             [
