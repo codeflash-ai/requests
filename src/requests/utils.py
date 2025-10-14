@@ -784,39 +784,42 @@ def should_bypass_proxies(url, no_proxy):
         no_proxy = get_proxy("no_proxy")
     parsed = urlparse(url)
 
-    if parsed.hostname is None:
+    hostname = parsed.hostname
+    if hostname is None:
         # URLs don't always have hostnames, e.g. file:/// urls.
         return True
 
+    # Cache .replace and .split, and prepare host/port string once
     if no_proxy:
-        # We need to check whether we match here. We need to see if we match
-        # the end of the hostname, both with and without the port.
-        no_proxy = (host for host in no_proxy.replace(" ", "").split(",") if host)
-
-        if is_ipv4_address(parsed.hostname):
-            for proxy_ip in no_proxy:
-                if is_valid_cidr(proxy_ip):
-                    if address_in_network(parsed.hostname, proxy_ip):
+        no_proxy_cleaned = no_proxy.replace(" ", "")
+        if no_proxy_cleaned:
+            no_proxy_hosts = [host for host in no_proxy_cleaned.split(",") if host]
+            is_ip = is_ipv4_address(hostname)
+            if is_ip:
+                # Avoid repeatedly calling is_valid_cidr or address_in_network if not needed
+                for proxy_ip in no_proxy_hosts:
+                    if is_valid_cidr(proxy_ip):
+                        if address_in_network(hostname, proxy_ip):
+                            return True
+                    elif hostname == proxy_ip:
+                        # If no_proxy ip was defined in plain IP notation instead of cidr notation &
+                        # matches the IP of the index
                         return True
-                elif parsed.hostname == proxy_ip:
-                    # If no_proxy ip was defined in plain IP notation instead of cidr notation &
-                    # matches the IP of the index
-                    return True
-        else:
-            host_with_port = parsed.hostname
-            if parsed.port:
-                host_with_port += f":{parsed.port}"
-
-            for host in no_proxy:
-                if parsed.hostname.endswith(host) or host_with_port.endswith(host):
-                    # The URL does match something in no_proxy, so we don't want
-                    # to apply the proxies on this URL.
-                    return True
+            else:
+                host_with_port = hostname
+                if parsed.port:
+                    host_with_port = f"{hostname}:{parsed.port}"
+                # Check all host matches, prefer tuple unpack for speed
+                for host in no_proxy_hosts:
+                    if hostname.endswith(host) or host_with_port.endswith(host):
+                        # The URL does match something in no_proxy, so we don't want
+                        # to apply the proxies on this URL.
+                        return True
 
     with set_environ("no_proxy", no_proxy_arg):
         # parsed.hostname can be `None` in cases such as a file URI.
         try:
-            bypass = proxy_bypass(parsed.hostname)
+            bypass = proxy_bypass(hostname)
         except (TypeError, socket.gaierror):
             bypass = False
 
