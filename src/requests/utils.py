@@ -846,22 +846,21 @@ def select_proxy(url, proxies):
     """
     proxies = proxies or {}
     urlparts = urlparse(url)
-    if urlparts.hostname is None:
-        return proxies.get(urlparts.scheme, proxies.get("all"))
+    hostname = urlparts.hostname
+    scheme = urlparts.scheme
 
-    proxy_keys = [
-        urlparts.scheme + "://" + urlparts.hostname,
-        urlparts.scheme,
-        "all://" + urlparts.hostname,
-        "all",
-    ]
-    proxy = None
-    for proxy_key in proxy_keys:
-        if proxy_key in proxies:
-            proxy = proxies[proxy_key]
-            break
+    # Fast path for missing hostname (no need to construct lists)
+    if hostname is None:
+        return proxies.get(scheme) if scheme in proxies else proxies.get("all")
 
-    return proxy
+    # Eliminate list construction, use a tuple and direct checks for faster lookup
+    if (key := f"{scheme}://{hostname}") in proxies:
+        return proxies[key]
+    if scheme in proxies:
+        return proxies[scheme]
+    if (key := f"all://{hostname}") in proxies:
+        return proxies[key]
+    return proxies.get("all")
 
 
 def resolve_proxies(request, proxies, trust_env=True):
