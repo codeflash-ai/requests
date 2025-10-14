@@ -38,10 +38,26 @@ class CaseInsensitiveDict(MutableMapping):
     """
 
     def __init__(self, data=None, **kwargs):
+        # Creating OrderedDict is fast; no change needed.
         self._store = OrderedDict()
         if data is None:
             data = {}
-        self.update(data, **kwargs)
+
+        # Avoid unnecessary double update: combine data and kwargs efficiently
+        if data and kwargs:
+            # Merge kwargs into data (without mutating user input), using fastest approach
+            if hasattr(data, "copy"):
+                merged = data.copy()
+            else:
+                # If data isn't a mapping, likely an iterable of pairs
+                merged = dict(data)
+            merged.update(kwargs)
+            self.update(merged)
+        elif data:
+            self.update(data)
+        elif kwargs:
+            self.update(kwargs)
+        # If both empty/nothing, skip update call
 
     def __setitem__(self, key, value):
         # Use the lowercased key for lookups, but store the actual
