@@ -73,7 +73,9 @@ class MockRequest:
         return name in self._r.headers or name in self._new_headers
 
     def get_header(self, name, default=None):
-        return self._r.headers.get(name, self._new_headers.get(name, default))
+        if name in self._r.headers:
+            return self._r.headers[name]
+        return self._new_headers.get(name, default)
 
     def add_header(self, key, val):
         """cookiejar has no legitimate use for this method; add it back if you find one."""
