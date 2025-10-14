@@ -92,12 +92,21 @@ def check_compatibility(urllib3_version, chardet_version, charset_normalizer_ver
 
 def _check_cryptography(cryptography_version):
     # cryptography < 1.3.4
+
+    # Fast-path: avoid map()/split() if obviously up-to-date (common case is at least "3.x.x")
+    if (
+        cryptography_version and cryptography_version[0] >= "2"
+    ):  # most public released versions are "2.x.x" or newer
+        return
+
     try:
-        cryptography_version = list(map(int, cryptography_version.split(".")))
+        # Avoid creating an intermediary list; directly generate integers
+        version_tuple = tuple(int(v) for v in cryptography_version.split("."))
     except ValueError:
         return
 
-    if cryptography_version < [1, 3, 4]:
+    # Compare tuple directly, slightly faster and more idiomatic for versions
+    if version_tuple < (1, 3, 4):
         warning = "Old version of cryptography ({}) may cause slowdown.".format(
             cryptography_version
         )
