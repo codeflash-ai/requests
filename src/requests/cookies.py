@@ -35,13 +35,15 @@ class MockRequest:
     def __init__(self, request):
         self._r = request
         self._new_headers = {}
-        self.type = urlparse(self._r.url).scheme
+        parsed_url = urlparse(self._r.url)
+        self.type = parsed_url.scheme
+        self._host = parsed_url.netloc
 
     def get_type(self):
         return self.type
 
     def get_host(self):
-        return urlparse(self._r.url).netloc
+        return self._host
 
     def get_origin_req_host(self):
         return self.get_host()
