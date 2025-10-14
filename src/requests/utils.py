@@ -59,6 +59,8 @@ from .exceptions import (
 )
 from .structures import CaseInsensitiveDict
 
+_DOTTED_NETMASK_CACHE = {b: None for b in range(1, 33)}
+
 NETRC_FILES = (".netrc", "_netrc")
 
 DEFAULT_CA_BUNDLE_PATH = certs.where()
@@ -112,7 +114,7 @@ if sys.platform == "win32":
                 return True
         return False
 
-    def proxy_bypass(host):  # noqa
+    def proxy_bypass(host):
         """Return True, if the host should be bypassed.
 
         Checks proxy settings gathered from the environment, if specified,
@@ -690,9 +692,12 @@ def address_in_network(ip, net):
 
     :rtype: bool
     """
+    # Minimize repeated conversion and dotted_netmask calculation cost.
     ipaddr = struct.unpack("=L", socket.inet_aton(ip))[0]
     netaddr, bits = net.split("/")
-    netmask = struct.unpack("=L", socket.inet_aton(dotted_netmask(int(bits))))[0]
+    mask = int(bits)
+    netmask_str = _dotted_netmask_cached(mask)
+    netmask = struct.unpack("=L", socket.inet_aton(netmask_str))[0]
     network = struct.unpack("=L", socket.inet_aton(netaddr))[0] & netmask
     return (ipaddr & netmask) == (network & netmask)
 
@@ -712,11 +717,12 @@ def is_ipv4_address(string_ip):
     """
     :rtype: bool
     """
+    # Use try/except as before, but avoid extra function indirection
     try:
         socket.inet_aton(string_ip)
+        return True
     except OSError:
         return False
-    return True
 
 
 def is_valid_cidr(string_network):
@@ -725,9 +731,11 @@ def is_valid_cidr(string_network):
 
     :rtype: bool
     """
+    # Inline split result to avoid splitting multiple times.
     if string_network.count("/") == 1:
+        ipmask_split = string_network.split("/", 1)
         try:
-            mask = int(string_network.split("/")[1])
+            mask = int(ipmask_split[1])
         except ValueError:
             return False
 
@@ -735,7 +743,7 @@ def is_valid_cidr(string_network):
             return False
 
         try:
-            socket.inet_aton(string_network.split("/")[0])
+            socket.inet_aton(ipmask_split[0])
         except OSError:
             return False
     else:
@@ -777,38 +785,40 @@ def should_bypass_proxies(url, no_proxy):
     def get_proxy(key):
         return os.environ.get(key) or os.environ.get(key.upper())
 
-    # First check whether no_proxy is defined. If it is, check that the URL
-    # we're getting isn't in the no_proxy list.
     no_proxy_arg = no_proxy
     if no_proxy is None:
         no_proxy = get_proxy("no_proxy")
     parsed = urlparse(url)
 
-    if parsed.hostname is None:
+    hostname = parsed.hostname
+    port = parsed.port
+
+    if hostname is None:
         # URLs don't always have hostnames, e.g. file:/// urls.
         return True
 
     if no_proxy:
-        # We need to check whether we match here. We need to see if we match
-        # the end of the hostname, both with and without the port.
-        no_proxy = (host for host in no_proxy.replace(" ", "").split(",") if host)
+        # Preprocess no_proxy list once, materialize generator.
+        np_list = [host for host in no_proxy.replace(" ", "").split(",") if host]
 
-        if is_ipv4_address(parsed.hostname):
-            for proxy_ip in no_proxy:
+        if is_ipv4_address(hostname):
+            for proxy_ip in np_list:
                 if is_valid_cidr(proxy_ip):
-                    if address_in_network(parsed.hostname, proxy_ip):
+                    if address_in_network(hostname, proxy_ip):
                         return True
-                elif parsed.hostname == proxy_ip:
+                elif hostname == proxy_ip:
                     # If no_proxy ip was defined in plain IP notation instead of cidr notation &
                     # matches the IP of the index
                     return True
         else:
-            host_with_port = parsed.hostname
-            if parsed.port:
-                host_with_port += f":{parsed.port}"
+            # Prebuild host_with_port string once per hostname
+            host_with_port = hostname
+            if port:
+                host_with_port = f"{hostname}:{port}"
 
-            for host in no_proxy:
-                if parsed.hostname.endswith(host) or host_with_port.endswith(host):
+            # Efficient membership test: use fast endswith logic in a for-loop
+            for host in np_list:
+                if hostname.endswith(host) or host_with_port.endswith(host):
                     # The URL does match something in no_proxy, so we don't want
                     # to apply the proxies on this URL.
                     return True
@@ -816,7 +826,7 @@ def should_bypass_proxies(url, no_proxy):
     with set_environ("no_proxy", no_proxy_arg):
         # parsed.hostname can be `None` in cases such as a file URI.
         try:
-            bypass = proxy_bypass(parsed.hostname)
+            bypass = proxy_bypass(hostname)
         except (TypeError, socket.gaierror):
             bypass = False
 
@@ -1097,3 +1107,16 @@ def rewind_body(prepared_request):
             )
     else:
         raise UnrewindableBodyError("Unable to rewind request body for redirect.")
+
+
+def _dotted_netmask_cached(mask):
+    # Replaces dotted_netmask with a direct cache lookup and only calculated once per mask value.
+    c = _DOTTED_NETMASK_CACHE
+    result = c.get(mask)
+    if result is not None:
+        return result
+    # Calculate and cache the result
+    bits = 0xFFFFFFFF ^ (1 << 32 - mask) - 1
+    s = socket.inet_ntoa(struct.pack(">I", bits))
+    c[mask] = s
+    return s
